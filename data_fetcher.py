@@ -1,8 +1,6 @@
-import requests
+import yfinance as yf
 import pandas as pd
-import json
 from datetime import datetime, timedelta
-import time
 import os
 from typing import Dict, List, Tuple
 import logging
@@ -10,138 +8,142 @@ import logging
 class ExchangeRateDataFetcher:
     def __init__(self, data_dir: str = "data"):
         self.data_dir = data_dir
-        
-        # Load configuration
-        self.config = self._load_config()
-        self.api_key = self.config.get('api_key')
-        
-        # exchangerate-api.com v6 API endpoints
-        self.latest_api_url = f"https://v6.exchangerate-api.com/v6/{self.api_key}/latest"
-        self.history_api_url = f"https://v6.exchangerate-api.com/v6/{self.api_key}/history"
         self.data_file = os.path.join(data_dir, "exchange_rates.csv")
         
         os.makedirs(data_dir, exist_ok=True)
         
         logging.basicConfig(level=logging.INFO)
         self.logger = logging.getLogger(__name__)
-    
-    def _load_config(self) -> Dict:
-        """Load configuration from config.json"""
-        config_path = "config.json"
-        if os.path.exists(config_path):
-            with open(config_path, 'r') as f:
-                return json.load(f)
-        else:
-            # Fallback to example config
-            self.logger.warning("config.json not found, using default configuration")
-            return {
-                "api_key": "your_api_key_here",
-                "base_currency": "USD",
-                "data_start_date": "2025-01-01"
-            }
+        
+        # Common currency pairs available on Yahoo Finance
+        self.currency_pairs = {
+            # Major pairs
+            'USD_to_EUR': 'EURUSD=X',
+            'USD_to_GBP': 'GBPUSD=X', 
+            'USD_to_JPY': 'USDJPY=X',
+            'USD_to_CHF': 'USDCHF=X',
+            'USD_to_CAD': 'USDCAD=X',
+            'USD_to_AUD': 'AUDUSD=X',
+            'USD_to_NZD': 'NZDUSD=X',
+            
+            # Cross pairs
+            'EUR_to_GBP': 'EURGBP=X',
+            'EUR_to_JPY': 'EURJPY=X',
+            'EUR_to_CHF': 'EURCHF=X',
+            'GBP_to_JPY': 'GBPJPY=X',
+            'GBP_to_CHF': 'GBPCHF=X',
+            'CHF_to_JPY': 'CHFJPY=X',
+            
+            # Asian currencies
+            'USD_to_CNY': 'USDCNY=X',
+            'USD_to_INR': 'USDINR=X',
+            'USD_to_KRW': 'USDKRW=X',
+            'USD_to_SGD': 'USDSGD=X',
+            'USD_to_THB': 'USDTHB=X',
+            'USD_to_VND': 'USDVND=X',
+            
+            # Other pairs
+            'USD_to_BRL': 'USDBRL=X',
+            'USD_to_MXN': 'USDMXN=X',
+            'USD_to_ZAR': 'USDZAR=X',
+            'USD_to_RUB': 'USDRUB=X'
+        }
+        
+        # Add reverse pairs
+        reverse_pairs = {}
+        for pair, symbol in self.currency_pairs.items():
+            from_curr, to_curr = pair.split('_to_')
+            reverse_pair = f'{to_curr}_to_{from_curr}'
+            reverse_pairs[reverse_pair] = symbol  # Same symbol, will invert the rate
+            
+        self.currency_pairs.update(reverse_pairs)
+        
+        self.logger.info(f"Initialized with {len(self.currency_pairs)} currency pairs")
     
     def fetch_historical_data(self, base_currency: str = "USD", 
-                            start_date: str = "2025-01-01", 
+                            start_date: str = "2020-01-01", 
                             end_date: str = None,
                             progress_callback=None) -> pd.DataFrame:
         """
-        Fetch real historical exchange rate data from exchangerate-api.com
+        Fetch real historical exchange rate data from Yahoo Finance
         
-        API Format: GET https://v6.exchangerate-api.com/v6/YOUR-API-KEY/history/USD/YEAR/MONTH/DAY
+        Yahoo Finance provides reliable, free historical currency data going back years.
+        Data is fetched efficiently in bulk rather than day-by-day API calls.
         
-        Note: This project fetches real historical data from 2025-01-01 onward.
-        For educational purposes, we limit the date range to keep API usage reasonable.
-        
-        Supported currencies include: USD, EUR, GBP, JPY, AUD, CAD, CHF, CNY, 
-        INR, KRW, SGD, NZD, MXN, BRL, ZAR, and many more.
+        Supported currency pairs: 30+ major and cross currency pairs
         """
         if end_date is None:
             end_date = datetime.now().strftime("%Y-%m-%d")
         
-        # Ensure we don't go before 2025-01-01
-        start = datetime.strptime(start_date, "%Y-%m-%d")
-        earliest_date = datetime(2025, 1, 1)
-        if start < earliest_date:
-            start = earliest_date
-            start_date = "2025-01-01"
-            self.logger.info(f"Adjusted start date to {start_date} - historical data available from 2025 onward")
-        
-        end = datetime.strptime(end_date, "%Y-%m-%d")
+        self.logger.info(f"Fetching historical data from Yahoo Finance: {start_date} to {end_date}")
         
         all_data = []
-        total_days = (end - start).days + 1
-        current_date = start
+        total_pairs = len(self.currency_pairs)
+        processed_pairs = 0
         
-        self.logger.info(f"Fetching historical data from {start_date} to {end_date}")
-        self.logger.info(f"Total days to fetch: {total_days}")
+        # Group by unique Yahoo Finance symbols to avoid duplicate requests
+        symbol_to_pairs = {}
+        for pair, symbol in self.currency_pairs.items():
+            if symbol not in symbol_to_pairs:
+                symbol_to_pairs[symbol] = []
+            symbol_to_pairs[symbol].append(pair)
         
-        while current_date <= end:
-            date_str = current_date.strftime("%Y-%m-%d")
-            year = current_date.year
-            month = current_date.month
-            day = current_date.day
-            
+        self.logger.info(f"Fetching data for {len(symbol_to_pairs)} unique currency symbols")
+        
+        for symbol, pairs in symbol_to_pairs.items():
             try:
-                # API format: /history/BASE_CURRENCY/YEAR/MONTH/DAY
-                history_url = f"{self.history_api_url}/{base_currency}/{year}/{month}/{day}"
-                self.logger.debug(f"Fetching: {history_url}")
+                self.logger.info(f"Fetching {symbol} for pairs: {pairs}")
                 
-                response = requests.get(history_url, timeout=15)
+                # Fetch data from Yahoo Finance
+                ticker = yf.Ticker(symbol)
+                hist_data = ticker.history(start=start_date, end=end_date)
                 
-                if response.status_code == 200:
-                    data = response.json()
+                if not hist_data.empty:
+                    self.logger.info(f"Retrieved {len(hist_data)} records for {symbol}")
                     
-                    if data.get('result') == 'success':
-                        rates = data.get('conversion_rates', {})
+                    # Process each date
+                    for date, row in hist_data.iterrows():
+                        date_str = date.strftime('%Y-%m-%d')
+                        close_price = row['Close']
                         
-                        row = {
-                            'date': date_str,
-                            'base_currency': base_currency
-                        }
-                        
-                        # Add forward rates (USD_to_EUR, USD_to_GBP, etc.)
-                        for currency, rate in rates.items():
-                            if currency != base_currency:
-                                row[f'{base_currency}_to_{currency}'] = rate
-                        
-                        # Add reverse rates (EUR_to_USD, GBP_to_USD, etc.)
-                        for currency, rate in rates.items():
-                            if currency != base_currency and rate > 0:
-                                row[f'{currency}_to_{base_currency}'] = 1.0 / rate
-                        
-                        all_data.append(row)
-                        
-                        if progress_callback:
-                            progress = ((current_date - start).days + 1) / total_days * 100
-                            progress_callback(progress, f"Fetched data for {date_str}")
-                    
-                    else:
-                        error_type = data.get('error-type', 'Unknown error')
-                        self.logger.warning(f"API error for {date_str}: {error_type}")
-                        
-                        # If it's just missing data for a specific date, continue
-                        if 'no-data' in error_type.lower() or 'unsupported-date' in error_type.lower():
-                            pass
-                        else:
-                            self.logger.error(f"API error: {error_type}")
-                            if 'invalid-key' in error_type.lower():
-                                self.logger.error("Please check your API key in config.json")
+                        # Find or create date row
+                        date_row = None
+                        for data_row in all_data:
+                            if data_row['date'] == date_str:
+                                date_row = data_row
                                 break
-                
-                elif response.status_code == 404:
-                    self.logger.warning(f"No data available for {date_str}")
+                        
+                        if date_row is None:
+                            date_row = {'date': date_str, 'base_currency': base_currency}
+                            all_data.append(date_row)
+                        
+                        # Add rates for all pairs using this symbol
+                        for pair in pairs:
+                            from_curr, to_curr = pair.split('_to_')
+                            
+                            # Determine if we need to invert the rate
+                            if symbol.startswith(from_curr):
+                                # Direct rate (e.g., USD/JPY for USD_to_JPY)
+                                rate = close_price
+                            else:
+                                # Inverse rate (e.g., EUR/USD for USD_to_EUR)
+                                rate = 1.0 / close_price if close_price != 0 else 0
+                            
+                            date_row[pair] = rate
                 
                 else:
-                    self.logger.warning(f"HTTP error for {date_str}: {response.status_code}")
+                    self.logger.warning(f"No data retrieved for {symbol}")
                 
-                # Rate limiting - be respectful to the API
-                time.sleep(0.2)
+                processed_pairs += len(pairs)
+                if progress_callback:
+                    progress = (processed_pairs / total_pairs) * 100
+                    progress_callback(progress, f"Fetched {symbol}")
                 
             except Exception as e:
-                self.logger.warning(f"Failed to fetch data for {date_str}: {e}")
-            
-            current_date += timedelta(days=1)
+                self.logger.error(f"Failed to fetch {symbol}: {e}")
+                processed_pairs += len(pairs)
         
+        # Convert to DataFrame
         df = pd.DataFrame(all_data)
         if not df.empty:
             df['date'] = pd.to_datetime(df['date'])
@@ -153,7 +155,7 @@ class ExchangeRateDataFetcher:
             
             # Log sample of available currency pairs
             sample_pairs = [col for col in df.columns if '_to_' in col][:5]
-            self.logger.info(f"Sample currency pairs available: {sample_pairs}")
+            self.logger.info(f"Currency pairs available: {sample_pairs}")
         else:
             self.logger.error("No historical data was successfully fetched")
         
@@ -168,39 +170,17 @@ class ExchangeRateDataFetcher:
         return pd.DataFrame()
     
     def get_currency_pairs(self) -> List[str]:
-        """Get available currency pairs from the data"""
-        df = self.load_data()
-        if df.empty:
-            # Return some common pairs for initial display
-            return [
-                'USD_to_EUR', 'USD_to_GBP', 'USD_to_JPY', 'USD_to_AUD', 
-                'USD_to_CAD', 'USD_to_CHF', 'USD_to_CNY', 'USD_to_INR',
-                'EUR_to_USD', 'EUR_to_GBP', 'EUR_to_JPY', 'GBP_to_USD'
-            ]
-        
-        pairs = []
-        for col in df.columns:
-            if '_to_' in col:
-                pairs.append(col)
-        
-        return sorted(pairs)
+        """Get available currency pairs"""
+        return sorted(list(self.currency_pairs.keys()))
     
     def get_available_currencies(self) -> List[str]:
-        """Get list of available currencies from the API"""
-        try:
-            # Use USD as base to get all available currencies
-            latest_url = f"{self.latest_api_url}/USD"
-            response = requests.get(latest_url, timeout=10)
-            if response.status_code == 200:
-                data = response.json()
-                if data.get('result') == 'success':
-                    rates = data.get('conversion_rates', {})
-                    return sorted(list(rates.keys()))
-        except Exception as e:
-            self.logger.warning(f"Failed to fetch available currencies: {e}")
-        
-        # Fallback to common currencies
-        return ['USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'CHF', 'CNY', 'INR', 'KRW']
+        """Get list of available currencies"""
+        currencies = set()
+        for pair in self.currency_pairs.keys():
+            from_curr, to_curr = pair.split('_to_')
+            currencies.add(from_curr)
+            currencies.add(to_curr)
+        return sorted(list(currencies))
     
     def get_rate_data(self, currency_pair: str) -> pd.DataFrame:
         """Get specific currency pair data"""
@@ -215,8 +195,9 @@ class ExchangeRateDataFetcher:
         df = self.load_data()
         
         if df.empty:
-            # No existing data, fetch from multiple base currencies for comprehensive coverage
-            return self.fetch_comprehensive_data(progress_callback=progress_callback)
+            # No existing data, fetch from 2020
+            return self.fetch_historical_data(base_currency, "2020-01-01", 
+                                            progress_callback=progress_callback)
         
         # Get the latest date in existing data
         latest_date = df['date'].max()
@@ -236,19 +217,6 @@ class ExchangeRateDataFetcher:
                 return combined
         
         return df
-    
-    def fetch_comprehensive_data(self, progress_callback=None):
-        """Fetch data from multiple base currencies to ensure comprehensive coverage"""
-        # Fetch from USD as primary base (gives us all other currencies)
-        data = self.fetch_historical_data("USD", "2025-01-01", 
-                                         progress_callback=progress_callback)
-        
-        if not data.empty:
-            self.logger.info(f"Fetched comprehensive data with {len(data)} records")
-            return data
-        else:
-            self.logger.error("Failed to fetch comprehensive data")
-            return pd.DataFrame()
     
     def delete_all_data(self):
         """Delete all downloaded data"""

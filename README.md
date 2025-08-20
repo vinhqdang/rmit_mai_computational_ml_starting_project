@@ -26,15 +26,15 @@ This starting project includes:
 
 - **Algorithm**: Simple Moving Average (10-day window)
 - **Purpose**: Educational demonstration of ML workflow
-- **Data Source**: exchangerate-api.com (168+ currencies supported)
-- **Historical Data**: Real historical data from 2025-01-01 onward
+- **Data Source**: Yahoo Finance (30+ major currency pairs)
+- **Historical Data**: Real historical exchange rate data going back years
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
 - Python 3.10 (conda environment recommended)
-- exchangerate-api.com API key (free tier available)
+- Internet connection for Yahoo Finance data
 
 ### One-Command Setup and Run
 
@@ -43,7 +43,7 @@ This starting project includes:
 conda activate py310 && pip install -r requirements.txt && python app.py
 ```
 
-### Test API Integration
+### Test Yahoo Finance Integration
 
 ```bash
 # Test if everything is working
@@ -62,23 +62,12 @@ python test_api.py
    pip install -r requirements.txt
    ```
 
-3. **Configure API Key**:
-   - Copy `config.json.example` to `config.json`
-   - Add your exchangerate-api.com API key to `config.json`
-   ```json
-   {
-       "api_key": "your_exchangerate_api_key_here",
-       "base_currency": "USD",
-       "data_start_date": "2025-01-01"
-   }
-   ```
-
-4. **Run Application**:
+3. **Run Application**:
    ```bash
    python app.py
    ```
 
-5. **Access Web Interface**:
+4. **Access Web Interface**:
    - Open http://localhost:5000
    - Use demo credentials displayed on homepage
 
@@ -102,12 +91,13 @@ The application displays demo credentials on the homepage:
 5. **Make Prediction**: View results and charts
 6. **Evaluate Model**: See RMSE scores for historical predictions
 
-### Available Currencies
+### Available Currency Pairs
 
-The system supports 168+ currencies including:
-- **Major**: USD, EUR, GBP, JPY, AUD, CAD, CHF
-- **Asian**: CNY, INR, KRW, SGD, THB, HKD
-- **Others**: BRL, MXN, ZAR, RUB, and many more
+The system supports 30+ major currency pairs including:
+- **Major**: USD/EUR, USD/GBP, USD/JPY, USD/CAD, USD/AUD, USD/CHF
+- **Cross**: EUR/GBP, EUR/JPY, GBP/JPY, CHF/JPY
+- **Asian**: USD/CNY, USD/INR, USD/KRW, USD/SGD, USD/THB, USD/VND
+- **Others**: USD/BRL, USD/MXN, USD/ZAR, USD/RUB
 
 ## 🔧 Technical Details
 
@@ -118,8 +108,6 @@ rmit_mai_computational_ml_starting_project/
 ├── app.py                 # Flask web application
 ├── predictor.py          # ML model implementation
 ├── data_fetcher.py       # Data acquisition system
-├── config.json           # API configuration (not in git)
-├── config.json.example   # Configuration template
 ├── requirements.txt      # Python dependencies
 ├── templates/           # HTML templates
 │   ├── base.html
@@ -131,12 +119,13 @@ rmit_mai_computational_ml_starting_project/
 └── models/            # Trained models (auto-created)
 ```
 
-### API Integration
+### Data Integration
 
-- **Service**: exchangerate-api.com
-- **Tier**: Free (1,500 requests/month)  
-- **Features**: Real-time and historical rates, 168+ currencies
-- **Date Range**: Historical data from 2025-01-01 onward
+- **Service**: Yahoo Finance
+- **Cost**: Completely free
+- **Features**: Real historical exchange rate data, 30+ currency pairs
+- **Data Range**: Historical data going back years (2000+)
+- **Benefits**: Reliable, authentic financial data perfect for ML learning
 
 ### Machine Learning Model
 
@@ -216,20 +205,20 @@ python app.py
 1. **"No data available for USD_to_EUR" Error**:
    - Run `python test_api.py` to diagnose the issue
    - Click "Fetch Latest Data" button in the web interface first
-   - Ensure your API key is valid in `config.json`
+   - Check internet connection to Yahoo Finance
 
-2. **API Key Error**: 
-   - Ensure valid key in `config.json`
-   - Get free key from https://www.exchangerate-api.com/
-   - Check key format: should be 24 characters
+2. **Yahoo Finance Connection Issues**:
+   - Ensure stable internet connection
+   - Yahoo Finance may have temporary outages
+   - Try running the test script to verify connectivity
 
 3. **Missing Dependencies**: Run `pip install -r requirements.txt`
 
 4. **Port Conflicts**: Change port in `app.py` if needed
 
 5. **Data Fetching Fails**: 
-   - Check internet connection and API limits
-   - Free tier allows 1,500 requests/month
+   - Check internet connection to Yahoo Finance
+   - Verify yfinance library is installed correctly
 
 ### Logs Location
 

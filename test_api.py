@@ -8,20 +8,9 @@ import json
 from data_fetcher import ExchangeRateDataFetcher
 from predictor import ExchangeRatePredictor
 
-def test_config():
-    """Test configuration loading"""
-    print("🔧 Testing configuration...")
-    try:
-        fetcher = ExchangeRateDataFetcher()
-        print(f"✅ API Key loaded: {fetcher.api_key[:10]}...")
-        return True
-    except Exception as e:
-        print(f"❌ Configuration error: {e}")
-        return False
-
-def test_api_connection():
-    """Test API connection and data fetching"""
-    print("\n🌐 Testing API connection...")
+def test_yahoo_finance():
+    """Test Yahoo Finance data fetching"""
+    print("🌐 Testing Yahoo Finance connection...")
     try:
         fetcher = ExchangeRateDataFetcher()
         
@@ -30,12 +19,17 @@ def test_api_connection():
         print(f"✅ Available currencies: {len(currencies)} found")
         print(f"   Sample: {currencies[:10]}")
         
-        # Test fetching small amount of data  
-        print("\n📊 Testing data fetch...")
-        data = fetcher.fetch_historical_data("USD", "2025-01-01", "2025-01-05")
+        # Test getting available currency pairs
+        pairs = fetcher.get_currency_pairs()
+        print(f"✅ Available currency pairs: {len(pairs)} found")
+        print(f"   Sample: {pairs[:10]}")
+        
+        # Test fetching small amount of historical data
+        print("\n📊 Testing historical data fetch...")
+        data = fetcher.fetch_historical_data("USD", "2024-01-01", "2024-01-05")
         
         if not data.empty:
-            print(f"✅ Data fetched successfully: {len(data)} records")
+            print(f"✅ Historical data fetched successfully: {len(data)} records")
             
             # Show available currency pairs
             pairs = [col for col in data.columns if '_to_' in col]
@@ -67,7 +61,7 @@ def test_prediction():
         predictor = ExchangeRatePredictor()
         
         # Ensure we have some data
-        data = fetcher.fetch_historical_data("USD", "2025-01-01", "2025-01-10")
+        data = fetcher.fetch_historical_data("USD", "2024-01-01", "2024-01-10")
         
         if data.empty:
             print("❌ No data available for prediction test")
@@ -86,7 +80,7 @@ def test_prediction():
             print(f"✅ Model trained successfully for {currency_pair}")
             
             # Test prediction
-            pred_result = predictor.predict(currency_pair, "2025-01-11", 5)
+            pred_result = predictor.predict(currency_pair, "2024-01-11", 5)
             print(f"✅ Prediction made for 5 days")
             print(f"   Predicted rate: {pred_result['predictions'][0]['predicted_rate']:.4f}")
             
@@ -101,17 +95,13 @@ def test_prediction():
 
 def main():
     """Run all tests"""
-    print("🚀 RMIT ML Exchange Rate Predictor - API Test")
+    print("🚀 RMIT ML Exchange Rate Predictor - Yahoo Finance Test")
     print("=" * 50)
     
     all_passed = True
     
-    # Test configuration
-    if not test_config():
-        all_passed = False
-    
-    # Test API connection
-    if not test_api_connection():
+    # Test Yahoo Finance connection
+    if not test_yahoo_finance():
         all_passed = False
     
     # Test prediction
@@ -125,9 +115,9 @@ def main():
     else:
         print("❌ Some tests failed. Please check the errors above.")
         print("💡 Make sure:")
-        print("   1. config.json exists with valid API key")
-        print("   2. Internet connection is available")
-        print("   3. All dependencies are installed")
+        print("   1. Internet connection is available")
+        print("   2. All dependencies are installed (pip install -r requirements.txt)")
+        print("   3. Yahoo Finance is accessible")
     
     return 0 if all_passed else 1
 
