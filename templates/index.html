@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Login - Exchange Rate Predictor{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0">
+                    <i class="fas fa-sign-in-alt me-2"></i>
+                    Login to Exchange Rate Predictor
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="demo-credentials">
+                    <h6><i class="fas fa-info-circle me-2"></i>Demo Credentials (for students):</h6>
+                    <div class="row">
+                        {% for username, password in demo_users.items() %}
+                        <div class="col-md-4 mb-2">
+                            <strong>{{ username }}</strong><br>
+                            <code>{{ password }}</code>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <small class="text-muted">
+                        <i class="fas fa-exclamation-triangle me-1"></i>
+                        These are demo credentials displayed for educational purposes only!
+                    </small>
+                </div>
+
+                <form method="POST" action="{{ url_for('login') }}">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Username</label>
+                        <input type="text" class="form-control" id="username" name="username" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Password</label>
+                        <input type="password" class="form-control" id="password" name="password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-sign-in-alt me-2"></i>Login
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-graduation-cap me-2"></i>
+                    About This Project
+                </h5>
+            </div>
+            <div class="card-body">
+                <p>This is a starting project for the Machine Learning course demonstrating:</p>
+                <ul>
+                    <li><i class="fas fa-chart-line me-1"></i> Exchange rate prediction using simple averaging</li>
+                    <li><i class="fas fa-database me-1"></i> Historical data fetching from APIs</li>
+                    <li><i class="fas fa-brain me-1"></i> Basic machine learning model implementation</li>
+                    <li><i class="fas fa-chart-bar me-1"></i> Data visualization and web interface</li>
+                    <li><i class="fas fa-cogs me-1"></i> Model evaluation with RMSE metrics</li>
+                </ul>
+                <p class="mb-0">
+                    <i class="fas fa-users me-1"></i>
+                    Built for RMIT Machine Learning students to understand ML workflow basics.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

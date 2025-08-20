@@ -1,0 +1,464 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Exchange Rate Predictor{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-cog me-2"></i>
+                    Controls
+                </h5>
+            </div>
+            <div class="card-body">
+                <!-- Data Management -->
+                <div class="mb-4">
+                    <h6><i class="fas fa-database me-2"></i>Data Management</h6>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-success" onclick="fetchData()">
+                            <i class="fas fa-download me-2"></i>Fetch Latest Data
+                        </button>
+                        <button class="btn btn-danger" onclick="deleteData()">
+                            <i class="fas fa-trash me-2"></i>Delete All Data
+                        </button>
+                    </div>
+                    {% if min_date and max_date %}
+                    <small class="text-muted d-block mt-2">
+                        <i class="fas fa-calendar me-1"></i>
+                        Data range: {{ min_date }} to {{ max_date }}
+                    </small>
+                    {% else %}
+                    <small class="text-warning d-block mt-2">
+                        <i class="fas fa-exclamation-triangle me-1"></i>
+                        No data available. Please fetch data first.
+                    </small>
+                    {% endif %}
+                </div>
+
+                <!-- Prediction Form -->
+                <div class="mb-4">
+                    <h6><i class="fas fa-crystal-ball me-2"></i>Make Prediction</h6>
+                    <form id="predictionForm">
+                        <div class="mb-3">
+                            <label class="form-label">Currency Pair</label>
+                            <div class="row">
+                                <div class="col-5">
+                                    <select class="form-select" id="fromCurrency" required>
+                                        <option value="">From...</option>
+                                        {% for currency in currencies %}
+                                        <option value="{{ currency }}" {% if currency == 'USD' %}selected{% endif %}>{{ currency }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-2 text-center pt-2">
+                                    <i class="fas fa-arrow-right"></i>
+                                </div>
+                                <div class="col-5">
+                                    <select class="form-select" id="toCurrency" required>
+                                        <option value="">To...</option>
+                                        {% for currency in currencies %}
+                                        <option value="{{ currency }}" {% if currency == 'EUR' %}selected{% endif %}>{{ currency }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <input type="hidden" id="currencyPair" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Prediction Date</label>
+                            <input type="date" class="form-control" id="predictionDate" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Days Ahead</label>
+                            <input type="number" class="form-control" id="daysAhead" value="10" min="1" max="30" required>
+                        </div>
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-magic me-2"></i>Predict
+                            </button>
+                            <button type="button" class="btn btn-warning" onclick="retrainModel()">
+                                <i class="fas fa-sync me-2"></i>Retrain Model
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Logs -->
+                <div class="mb-3">
+                    <h6><i class="fas fa-file-alt me-2"></i>Prediction Logs</h6>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-info btn-sm" onclick="showLogs()">
+                            <i class="fas fa-eye me-2"></i>View Logs
+                        </button>
+                        <button class="btn btn-secondary btn-sm" onclick="clearLogs()">
+                            <i class="fas fa-broom me-2"></i>Clear Logs
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <!-- Progress Bar -->
+        <div class="progress-container" id="progressContainer">
+            <div class="card">
+                <div class="card-body">
+                    <h6><i class="fas fa-spinner fa-spin me-2"></i>Operation in Progress</h6>
+                    <div class="progress mb-2">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                             id="progressBar" role="progressbar" style="width: 0%"></div>
+                    </div>
+                    <small class="text-muted" id="progressMessage">Starting...</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Prediction Results -->
+        <div id="predictionResults"></div>
+
+        <!-- Chart -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-line me-2"></i>
+                    Exchange Rate Chart
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="exchangeChart" style="height: 400px;"></div>
+                <small class="text-muted">
+                    <i class="fas fa-info-circle me-1"></i>
+                    Select a currency pair and make a prediction to see the chart with predictions.
+                </small>
+            </div>
+        </div>
+
+        <!-- Logs Modal -->
+        <div class="modal fade" id="logsModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="fas fa-file-alt me-2"></i>Prediction Logs
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="log-container" id="logContainer">
+                            Loading logs...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let progressInterval;
+
+// Set default date to today
+document.getElementById('predictionDate').value = new Date().toISOString().split('T')[0];
+
+// Update currency pair when selections change
+function updateCurrencyPair() {
+    const fromCurrency = document.getElementById('fromCurrency').value;
+    const toCurrency = document.getElementById('toCurrency').value;
+    
+    if (fromCurrency && toCurrency && fromCurrency !== toCurrency) {
+        document.getElementById('currencyPair').value = `${fromCurrency}_to_${toCurrency}`;
+    } else {
+        document.getElementById('currencyPair').value = '';
+    }
+}
+
+document.getElementById('fromCurrency').addEventListener('change', updateCurrencyPair);
+document.getElementById('toCurrency').addEventListener('change', updateCurrencyPair);
+
+// Initialize currency pair
+updateCurrencyPair();
+
+// Prediction form handler
+document.getElementById('predictionForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const currencyPair = document.getElementById('currencyPair').value;
+    const predictionDate = document.getElementById('predictionDate').value;
+    const daysAhead = document.getElementById('daysAhead').value;
+    
+    if (!currencyPair) {
+        showAlert('Please select different currencies for From and To', 'warning');
+        return;
+    }
+    
+    try {
+        showProgress('Making prediction...');
+        
+        const response = await fetch('/predict', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                currency_pair: currencyPair,
+                prediction_date: predictionDate,
+                days_ahead: parseInt(daysAhead)
+            })
+        });
+        
+        const result = await response.json();
+        hideProgress();
+        
+        if (response.ok) {
+            displayPredictionResults(result);
+            updateChart(currencyPair, result.predictions);
+        } else {
+            showAlert('Error: ' + result.error, 'danger');
+        }
+    } catch (error) {
+        hideProgress();
+        showAlert('Error: ' + error.message, 'danger');
+    }
+});
+
+async function fetchData() {
+    try {
+        showProgress('Fetching data...');
+        
+        const response = await fetch('/fetch_data', {method: 'POST'});
+        const result = await response.json();
+        
+        if (response.ok) {
+            // Start monitoring progress
+            monitorProgress();
+        } else {
+            hideProgress();
+            showAlert('Error: ' + result.error, 'danger');
+        }
+    } catch (error) {
+        hideProgress();
+        showAlert('Error: ' + error.message, 'danger');
+    }
+}
+
+async function deleteData() {
+    if (!confirm('Are you sure you want to delete all data? This cannot be undone.')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/delete_data', {method: 'POST'});
+        const result = await response.json();
+        
+        if (response.ok) {
+            showAlert(result.message, 'success');
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showAlert('Error: ' + result.error, 'danger');
+        }
+    } catch (error) {
+        showAlert('Error: ' + error.message, 'danger');
+    }
+}
+
+async function retrainModel() {
+    updateCurrencyPair();
+    const currencyPair = document.getElementById('currencyPair').value;
+    if (!currencyPair) {
+        showAlert('Please select different currencies first', 'warning');
+        return;
+    }
+    
+    try {
+        showProgress('Retraining model...');
+        
+        const response = await fetch('/retrain', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({currency_pair: currencyPair})
+        });
+        
+        const result = await response.json();
+        hideProgress();
+        
+        if (response.ok) {
+            showAlert('Model retrained successfully', 'success');
+        } else {
+            showAlert('Error: ' + result.error, 'danger');
+        }
+    } catch (error) {
+        hideProgress();
+        showAlert('Error: ' + error.message, 'danger');
+    }
+}
+
+async function showLogs() {
+    try {
+        const response = await fetch('/prediction_logs');
+        const result = await response.json();
+        
+        if (response.ok) {
+            document.getElementById('logContainer').innerHTML = result.logs.join('');
+            new bootstrap.Modal(document.getElementById('logsModal')).show();
+        } else {
+            showAlert('Error loading logs: ' + result.error, 'danger');
+        }
+    } catch (error) {
+        showAlert('Error: ' + error.message, 'danger');
+    }
+}
+
+async function clearLogs() {
+    if (!confirm('Clear all prediction logs?')) return;
+    
+    try {
+        const response = await fetch('/clear_logs', {method: 'POST'});
+        const result = await response.json();
+        
+        if (response.ok) {
+            showAlert('Logs cleared', 'success');
+        } else {
+            showAlert('Error: ' + result.error, 'danger');
+        }
+    } catch (error) {
+        showAlert('Error: ' + error.message, 'danger');
+    }
+}
+
+function displayPredictionResults(result) {
+    const html = `
+        <div class="card prediction-result">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-crystal-ball me-2"></i>
+                    Prediction Results
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Model Information</h6>
+                        <ul class="list-unstyled">
+                            <li><strong>Currency Pair:</strong> ${result.currency_pair.replace('_to_', ' → ')}</li>
+                            <li><strong>Model Type:</strong> ${result.model_type}</li>
+                            <li><strong>Training Points:</strong> ${result.model_info.training_points}</li>
+                            <li><strong>Training Range:</strong> ${result.model_info.training_range[0]} to ${result.model_info.training_range[1]}</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Predictions</h6>
+                        ${result.predictions.slice(0, 3).map(p => `
+                            <div class="d-flex justify-content-between">
+                                <span>${p.date}:</span>
+                                <strong>${p.predicted_rate.toFixed(4)}</strong>
+                            </div>
+                        `).join('')}
+                        ${result.predictions.length > 3 ? `<small class="text-muted">... and ${result.predictions.length - 3} more days</small>` : ''}
+                        ${result.rmse ? `<div class="mt-2 alert alert-info"><strong>RMSE:</strong> ${result.rmse.toFixed(4)}</div>` : ''}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.getElementById('predictionResults').innerHTML = html;
+}
+
+async function updateChart(currencyPair, predictions = []) {
+    try {
+        const response = await fetch(`/chart_data?currency_pair=${currencyPair}`);
+        const result = await response.json();
+        
+        if (response.ok) {
+            const trace1 = {
+                x: result.dates,
+                y: result.rates,
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Historical Rates',
+                line: {color: 'blue'}
+            };
+            
+            const traces = [trace1];
+            
+            if (predictions.length > 0) {
+                const trace2 = {
+                    x: predictions.map(p => p.date),
+                    y: predictions.map(p => p.predicted_rate),
+                    type: 'scatter',
+                    mode: 'lines+markers',
+                    name: 'Predictions',
+                    line: {color: 'red', dash: 'dash'},
+                    marker: {color: 'red'}
+                };
+                traces.push(trace2);
+            }
+            
+            const layout = {
+                title: `${currencyPair.replace('_to_', ' → ')} Exchange Rate`,
+                xaxis: {title: 'Date'},
+                yaxis: {title: 'Exchange Rate'},
+                hovermode: 'x unified'
+            };
+            
+            Plotly.newPlot('exchangeChart', traces, layout);
+        }
+    } catch (error) {
+        console.error('Error updating chart:', error);
+    }
+}
+
+function showProgress(message) {
+    document.getElementById('progressContainer').style.display = 'block';
+    document.getElementById('progressMessage').textContent = message;
+}
+
+function hideProgress() {
+    document.getElementById('progressContainer').style.display = 'none';
+    if (progressInterval) {
+        clearInterval(progressInterval);
+    }
+}
+
+function monitorProgress() {
+    progressInterval = setInterval(async () => {
+        try {
+            const response = await fetch('/progress');
+            const progress = await response.json();
+            
+            document.getElementById('progressBar').style.width = progress.current + '%';
+            document.getElementById('progressMessage').textContent = progress.message;
+            
+            if (progress.status === 'completed') {
+                hideProgress();
+                showAlert('Operation completed successfully', 'success');
+                setTimeout(() => location.reload(), 1500);
+            } else if (progress.status === 'error') {
+                hideProgress();
+                showAlert(progress.message, 'danger');
+            }
+        } catch (error) {
+            console.error('Error monitoring progress:', error);
+        }
+    }, 1000);
+}
+
+function showAlert(message, type) {
+    const alert = document.createElement('div');
+    alert.className = `alert alert-${type} alert-dismissible fade show`;
+    alert.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    document.querySelector('.container').insertBefore(alert, document.querySelector('.container').firstChild);
+    
+    setTimeout(() => {
+        if (alert.parentNode) {
+            alert.remove();
+        }
+    }, 5000);
+}
+</script>
+{% endblock %}
