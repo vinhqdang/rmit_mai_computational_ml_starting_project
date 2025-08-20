@@ -95,10 +95,18 @@ def predict():
         
         # Check if we have a trained model
         if not predictor.load_model(currency_pair):
-            # Train model first
+            # Train model first - but first ensure we have data
             data = data_fetcher.get_rate_data(currency_pair)
             if data.empty:
-                return jsonify({'error': f'No data available for {currency_pair}'}), 400
+                # Try to fetch data first
+                try:
+                    base_currency = currency_pair.split('_to_')[0]
+                    data_fetcher.fetch_historical_data(base_currency, progress_callback=update_progress)
+                    data = data_fetcher.get_rate_data(currency_pair)
+                    if data.empty:
+                        return jsonify({'error': f'Unable to fetch data for {currency_pair}. Please try fetching data first.'}), 400
+                except Exception as e:
+                    return jsonify({'error': f'Failed to fetch data: {str(e)}'}), 400
             
             train_result = predictor.train(data, currency_pair)
             if train_result['status'] != 'success':

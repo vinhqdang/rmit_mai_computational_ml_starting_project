@@ -18,7 +18,7 @@ class ExchangeRateDataFetcher:
         # exchangerate-api.com v6 API endpoints
         # Note: This uses the free tier which provides current rates
         # Historical data simulation is used for educational purposes
-        self.latest_url = f"https://v6.exchangerate-api.com/v6/{self.api_key}/latest"
+        self.base_api_url = f"https://v6.exchangerate-api.com/v6/{self.api_key}/latest"
         self.data_file = os.path.join(data_dir, "exchange_rates.csv")
         
         os.makedirs(data_dir, exist_ok=True)
@@ -60,13 +60,19 @@ class ExchangeRateDataFetcher:
         
         # For demo purposes, we'll fetch current rates and create historical simulation
         try:
-            response = requests.get(self.latest_url, timeout=10)
+            latest_url = f"{self.base_api_url}/{base_currency}"
+            self.logger.info(f"Fetching data from: {latest_url}")
+            response = requests.get(latest_url, timeout=10)
+            
+            self.logger.info(f"API Response status: {response.status_code}")
             
             if response.status_code == 200:
                 data = response.json()
+                self.logger.info(f"API Response result: {data.get('result')}")
                 
                 if data.get('result') == 'success':
                     rates = data.get('conversion_rates', {})
+                    self.logger.info(f"Found {len(rates)} exchange rates")
                     
                     # Generate simulated historical data
                     all_data = self._generate_simulated_historical_data(
@@ -81,13 +87,20 @@ class ExchangeRateDataFetcher:
                         # Save to CSV
                         df.to_csv(self.data_file, index=False)
                         self.logger.info(f"Saved {len(df)} records to {self.data_file}")
+                        
+                        # Log sample of available currency pairs
+                        sample_pairs = [col for col in df.columns if '_to_' in col][:5]
+                        self.logger.info(f"Sample currency pairs available: {sample_pairs}")
                     
                     return df
                 else:
-                    self.logger.error(f"API error: {data.get('error-type', 'Unknown error')}")
+                    error_type = data.get('error-type', 'Unknown error')
+                    self.logger.error(f"API error: {error_type}")
+                    if 'invalid-key' in error_type.lower():
+                        self.logger.error("Please check your API key in config.json")
                     return pd.DataFrame()
             else:
-                self.logger.error(f"HTTP error: {response.status_code}")
+                self.logger.error(f"HTTP error: {response.status_code} - {response.text}")
                 return pd.DataFrame()
                 
         except Exception as e:
@@ -135,6 +148,13 @@ class ExchangeRateDataFetcher:
                     # Apply time-based variation
                     simulated_rate = rate * time_factor * noise_factor
                     row[f'{base_currency}_to_{currency}'] = simulated_rate
+                    
+            # Also add the reverse rates (e.g., EUR_to_USD from USD_to_EUR)
+            for currency, rate in current_rates.items():
+                if currency != base_currency and rate > 0:
+                    # Calculate reverse rate
+                    reverse_rate = (1.0 / rate) * time_factor * noise_factor
+                    row[f'{currency}_to_{base_currency}'] = reverse_rate
             
             all_data.append(row)
             
@@ -186,7 +206,9 @@ class ExchangeRateDataFetcher:
     def get_available_currencies(self) -> List[str]:
         """Get list of available currencies from the API"""
         try:
-            response = requests.get(self.latest_url, timeout=10)
+            # Use USD as base to get all available currencies
+            latest_url = f"{self.base_api_url}/USD"
+            response = requests.get(latest_url, timeout=10)
             if response.status_code == 200:
                 data = response.json()
                 if data.get('result') == 'success':
@@ -211,9 +233,8 @@ class ExchangeRateDataFetcher:
         df = self.load_data()
         
         if df.empty:
-            # No existing data, fetch all from 2010
-            return self.fetch_historical_data(base_currency, "2010-01-01", 
-                                            progress_callback=progress_callback)
+            # No existing data, fetch from multiple base currencies for comprehensive coverage
+            return self.fetch_comprehensive_data(progress_callback=progress_callback)
         
         # Get the latest date in existing data
         latest_date = df['date'].max()
@@ -233,6 +254,19 @@ class ExchangeRateDataFetcher:
                 return combined
         
         return df
+    
+    def fetch_comprehensive_data(self, progress_callback=None):
+        """Fetch data from multiple base currencies to ensure comprehensive coverage"""
+        # Fetch from USD as primary base (gives us all other currencies)
+        data = self.fetch_historical_data("USD", "2010-01-01", 
+                                         progress_callback=progress_callback)
+        
+        if not data.empty:
+            self.logger.info(f"Fetched comprehensive data with {len(data)} records")
+            return data
+        else:
+            self.logger.error("Failed to fetch comprehensive data")
+            return pd.DataFrame()
     
     def delete_all_data(self):
         """Delete all downloaded data"""

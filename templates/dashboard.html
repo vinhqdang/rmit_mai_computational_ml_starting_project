@@ -30,10 +30,11 @@
                         Data range: {{ min_date }} to {{ max_date }}
                     </small>
                     {% else %}
-                    <small class="text-warning d-block mt-2">
+                    <div class="alert alert-warning mt-2" role="alert">
                         <i class="fas fa-exclamation-triangle me-1"></i>
-                        No data available. Please fetch data first.
-                    </small>
+                        <strong>No data available!</strong><br>
+                        <small>Click "Fetch Latest Data" above to download exchange rate data before making predictions.</small>
+                    </div>
                     {% endif %}
                 </div>
 

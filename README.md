@@ -43,6 +43,13 @@ This starting project includes:
 conda activate py310 && pip install -r requirements.txt && python app.py
 ```
 
+### Test API Integration
+
+```bash
+# Test if everything is working
+python test_api.py
+```
+
 ### Step-by-Step Setup
 
 1. **Environment Setup**:
@@ -206,10 +213,23 @@ python app.py
 
 ### Common Issues
 
-1. **API Key Error**: Ensure valid key in `config.json`
-2. **Missing Dependencies**: Run `pip install -r requirements.txt`
-3. **Port Conflicts**: Change port in `app.py` if needed
-4. **Data Fetching Fails**: Check internet connection and API limits
+1. **"No data available for USD_to_EUR" Error**:
+   - Run `python test_api.py` to diagnose the issue
+   - Click "Fetch Latest Data" button in the web interface first
+   - Ensure your API key is valid in `config.json`
+
+2. **API Key Error**: 
+   - Ensure valid key in `config.json`
+   - Get free key from https://www.exchangerate-api.com/
+   - Check key format: should be 24 characters
+
+3. **Missing Dependencies**: Run `pip install -r requirements.txt`
+
+4. **Port Conflicts**: Change port in `app.py` if needed
+
+5. **Data Fetching Fails**: 
+   - Check internet connection and API limits
+   - Free tier allows 1,500 requests/month
 
 ### Logs Location
 
