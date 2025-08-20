@@ -30,9 +30,9 @@ def test_api_connection():
         print(f"✅ Available currencies: {len(currencies)} found")
         print(f"   Sample: {currencies[:10]}")
         
-        # Test fetching small amount of data
+        # Test fetching small amount of data  
         print("\n📊 Testing data fetch...")
-        data = fetcher.fetch_historical_data("USD", "2024-01-01", "2024-01-05")
+        data = fetcher.fetch_historical_data("USD", "2025-01-01", "2025-01-05")
         
         if not data.empty:
             print(f"✅ Data fetched successfully: {len(data)} records")
@@ -67,7 +67,7 @@ def test_prediction():
         predictor = ExchangeRatePredictor()
         
         # Ensure we have some data
-        data = fetcher.fetch_historical_data("USD", "2024-01-01", "2024-01-10")
+        data = fetcher.fetch_historical_data("USD", "2025-01-01", "2025-01-10")
         
         if data.empty:
             print("❌ No data available for prediction test")
@@ -86,7 +86,7 @@ def test_prediction():
             print(f"✅ Model trained successfully for {currency_pair}")
             
             # Test prediction
-            pred_result = predictor.predict(currency_pair, "2024-01-11", 5)
+            pred_result = predictor.predict(currency_pair, "2025-01-11", 5)
             print(f"✅ Prediction made for 5 days")
             print(f"   Predicted rate: {pred_result['predictions'][0]['predicted_rate']:.4f}")
             

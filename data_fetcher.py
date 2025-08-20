@@ -16,9 +16,8 @@ class ExchangeRateDataFetcher:
         self.api_key = self.config.get('api_key')
         
         # exchangerate-api.com v6 API endpoints
-        # Note: This uses the free tier which provides current rates
-        # Historical data simulation is used for educational purposes
-        self.base_api_url = f"https://v6.exchangerate-api.com/v6/{self.api_key}/latest"
+        self.latest_api_url = f"https://v6.exchangerate-api.com/v6/{self.api_key}/latest"
+        self.history_api_url = f"https://v6.exchangerate-api.com/v6/{self.api_key}/history"
         self.data_file = os.path.join(data_dir, "exchange_rates.csv")
         
         os.makedirs(data_dir, exist_ok=True)
@@ -38,19 +37,20 @@ class ExchangeRateDataFetcher:
             return {
                 "api_key": "your_api_key_here",
                 "base_currency": "USD",
-                "data_start_date": "2010-01-01"
+                "data_start_date": "2025-01-01"
             }
     
     def fetch_historical_data(self, base_currency: str = "USD", 
-                            start_date: str = "2010-01-01", 
+                            start_date: str = "2025-01-01", 
                             end_date: str = None,
                             progress_callback=None) -> pd.DataFrame:
         """
-        Fetch exchange rate data and generate historical simulation
+        Fetch real historical exchange rate data from exchangerate-api.com
         
-        Note: This project uses exchangerate-api.com for educational purposes.
-        The free tier provides current exchange rates for 168+ currencies.
-        Historical data is simulated based on current rates with realistic variations.
+        API Format: GET https://v6.exchangerate-api.com/v6/YOUR-API-KEY/history/USD/YEAR/MONTH/DAY
+        
+        Note: This project fetches real historical data from 2025-01-01 onward.
+        For educational purposes, we limit the date range to keep API usage reasonable.
         
         Supported currencies include: USD, EUR, GBP, JPY, AUD, CAD, CHF, CNY, 
         INR, KRW, SGD, NZD, MXN, BRL, ZAR, and many more.
@@ -58,113 +58,89 @@ class ExchangeRateDataFetcher:
         if end_date is None:
             end_date = datetime.now().strftime("%Y-%m-%d")
         
-        # For demo purposes, we'll fetch current rates and create historical simulation
-        try:
-            latest_url = f"{self.base_api_url}/{base_currency}"
-            self.logger.info(f"Fetching data from: {latest_url}")
-            response = requests.get(latest_url, timeout=10)
-            
-            self.logger.info(f"API Response status: {response.status_code}")
-            
-            if response.status_code == 200:
-                data = response.json()
-                self.logger.info(f"API Response result: {data.get('result')}")
-                
-                if data.get('result') == 'success':
-                    rates = data.get('conversion_rates', {})
-                    self.logger.info(f"Found {len(rates)} exchange rates")
-                    
-                    # Generate simulated historical data
-                    all_data = self._generate_simulated_historical_data(
-                        base_currency, rates, start_date, end_date, progress_callback
-                    )
-                    
-                    df = pd.DataFrame(all_data)
-                    if not df.empty:
-                        df['date'] = pd.to_datetime(df['date'])
-                        df = df.sort_values('date')
-                        
-                        # Save to CSV
-                        df.to_csv(self.data_file, index=False)
-                        self.logger.info(f"Saved {len(df)} records to {self.data_file}")
-                        
-                        # Log sample of available currency pairs
-                        sample_pairs = [col for col in df.columns if '_to_' in col][:5]
-                        self.logger.info(f"Sample currency pairs available: {sample_pairs}")
-                    
-                    return df
-                else:
-                    error_type = data.get('error-type', 'Unknown error')
-                    self.logger.error(f"API error: {error_type}")
-                    if 'invalid-key' in error_type.lower():
-                        self.logger.error("Please check your API key in config.json")
-                    return pd.DataFrame()
-            else:
-                self.logger.error(f"HTTP error: {response.status_code} - {response.text}")
-                return pd.DataFrame()
-                
-        except Exception as e:
-            self.logger.error(f"Failed to fetch data: {e}")
-            return pd.DataFrame()
-    
-    def _generate_simulated_historical_data(self, base_currency: str, current_rates: Dict, 
-                                          start_date: str, end_date: str, 
-                                          progress_callback=None) -> List[Dict]:
-        """
-        Generate simulated historical data based on current rates
-        This is for demo purposes - adds random variations to create realistic-looking historical data
-        """
-        import random
-        import numpy as np
-        
+        # Ensure we don't go before 2025-01-01
         start = datetime.strptime(start_date, "%Y-%m-%d")
+        earliest_date = datetime(2025, 1, 1)
+        if start < earliest_date:
+            start = earliest_date
+            start_date = "2025-01-01"
+            self.logger.info(f"Adjusted start date to {start_date} - historical data available from 2025 onward")
+        
         end = datetime.strptime(end_date, "%Y-%m-%d")
         
         all_data = []
         total_days = (end - start).days + 1
         current_date = start
         
-        self.logger.info(f"Generating simulated historical data from {start_date} to {end_date}")
-        
-        # Set random seed for reproducible "historical" data
-        random.seed(42)
-        np.random.seed(42)
+        self.logger.info(f"Fetching historical data from {start_date} to {end_date}")
+        self.logger.info(f"Total days to fetch: {total_days}")
         
         while current_date <= end:
             date_str = current_date.strftime("%Y-%m-%d")
+            year = current_date.year
+            month = current_date.month
+            day = current_date.day
             
-            row = {
-                'date': date_str,
-                'base_currency': base_currency
-            }
-            
-            # Add some realistic variation to current rates (±10% over time)
-            days_from_start = (current_date - start).days
-            time_factor = 1 + 0.1 * np.sin(days_from_start / 365.0 * 2 * np.pi)  # Yearly cycle
-            noise_factor = 1 + np.random.normal(0, 0.02)  # Daily noise
-            
-            for currency, rate in current_rates.items():
-                if currency != base_currency:
-                    # Apply time-based variation
-                    simulated_rate = rate * time_factor * noise_factor
-                    row[f'{base_currency}_to_{currency}'] = simulated_rate
+            try:
+                # API format: /history/BASE_CURRENCY/YEAR/MONTH/DAY
+                history_url = f"{self.history_api_url}/{base_currency}/{year}/{month}/{day}"
+                self.logger.debug(f"Fetching: {history_url}")
+                
+                response = requests.get(history_url, timeout=15)
+                
+                if response.status_code == 200:
+                    data = response.json()
                     
-            # Also add the reverse rates (e.g., EUR_to_USD from USD_to_EUR)
-            for currency, rate in current_rates.items():
-                if currency != base_currency and rate > 0:
-                    # Calculate reverse rate
-                    reverse_rate = (1.0 / rate) * time_factor * noise_factor
-                    row[f'{currency}_to_{base_currency}'] = reverse_rate
-            
-            all_data.append(row)
-            
-            if progress_callback:
-                progress = ((current_date - start).days + 1) / total_days * 100
-                progress_callback(progress)
+                    if data.get('result') == 'success':
+                        rates = data.get('conversion_rates', {})
+                        
+                        row = {
+                            'date': date_str,
+                            'base_currency': base_currency
+                        }
+                        
+                        # Add forward rates (USD_to_EUR, USD_to_GBP, etc.)
+                        for currency, rate in rates.items():
+                            if currency != base_currency:
+                                row[f'{base_currency}_to_{currency}'] = rate
+                        
+                        # Add reverse rates (EUR_to_USD, GBP_to_USD, etc.)
+                        for currency, rate in rates.items():
+                            if currency != base_currency and rate > 0:
+                                row[f'{currency}_to_{base_currency}'] = 1.0 / rate
+                        
+                        all_data.append(row)
+                        
+                        if progress_callback:
+                            progress = ((current_date - start).days + 1) / total_days * 100
+                            progress_callback(progress, f"Fetched data for {date_str}")
+                    
+                    else:
+                        error_type = data.get('error-type', 'Unknown error')
+                        self.logger.warning(f"API error for {date_str}: {error_type}")
+                        
+                        # If it's just missing data for a specific date, continue
+                        if 'no-data' in error_type.lower() or 'unsupported-date' in error_type.lower():
+                            pass
+                        else:
+                            self.logger.error(f"API error: {error_type}")
+                            if 'invalid-key' in error_type.lower():
+                                self.logger.error("Please check your API key in config.json")
+                                break
+                
+                elif response.status_code == 404:
+                    self.logger.warning(f"No data available for {date_str}")
+                
+                else:
+                    self.logger.warning(f"HTTP error for {date_str}: {response.status_code}")
+                
+                # Rate limiting - be respectful to the API
+                time.sleep(0.2)
+                
+            except Exception as e:
+                self.logger.warning(f"Failed to fetch data for {date_str}: {e}")
             
             current_date += timedelta(days=1)
-        
-        return all_data
         
         df = pd.DataFrame(all_data)
         if not df.empty:
@@ -174,6 +150,12 @@ class ExchangeRateDataFetcher:
             # Save to CSV
             df.to_csv(self.data_file, index=False)
             self.logger.info(f"Saved {len(df)} records to {self.data_file}")
+            
+            # Log sample of available currency pairs
+            sample_pairs = [col for col in df.columns if '_to_' in col][:5]
+            self.logger.info(f"Sample currency pairs available: {sample_pairs}")
+        else:
+            self.logger.error("No historical data was successfully fetched")
         
         return df
     
@@ -207,7 +189,7 @@ class ExchangeRateDataFetcher:
         """Get list of available currencies from the API"""
         try:
             # Use USD as base to get all available currencies
-            latest_url = f"{self.base_api_url}/USD"
+            latest_url = f"{self.latest_api_url}/USD"
             response = requests.get(latest_url, timeout=10)
             if response.status_code == 200:
                 data = response.json()
@@ -258,7 +240,7 @@ class ExchangeRateDataFetcher:
     def fetch_comprehensive_data(self, progress_callback=None):
         """Fetch data from multiple base currencies to ensure comprehensive coverage"""
         # Fetch from USD as primary base (gives us all other currencies)
-        data = self.fetch_historical_data("USD", "2010-01-01", 
+        data = self.fetch_historical_data("USD", "2025-01-01", 
                                          progress_callback=progress_callback)
         
         if not data.empty:

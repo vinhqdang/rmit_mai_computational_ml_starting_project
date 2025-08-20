@@ -27,7 +27,7 @@ This starting project includes:
 - **Algorithm**: Simple Moving Average (10-day window)
 - **Purpose**: Educational demonstration of ML workflow
 - **Data Source**: exchangerate-api.com (168+ currencies supported)
-- **Historical Data**: Simulated based on current rates with realistic variations
+- **Historical Data**: Real historical data from 2025-01-01 onward
 
 ## 🚀 Quick Start
 
@@ -69,7 +69,7 @@ python test_api.py
    {
        "api_key": "your_exchangerate_api_key_here",
        "base_currency": "USD",
-       "data_start_date": "2010-01-01"
+       "data_start_date": "2025-01-01"
    }
    ```
 
@@ -134,9 +134,9 @@ rmit_mai_computational_ml_starting_project/
 ### API Integration
 
 - **Service**: exchangerate-api.com
-- **Tier**: Free (1,500 requests/month)
-- **Features**: Real-time rates, 168+ currencies
-- **Limitation**: Historical data simulated for educational purposes
+- **Tier**: Free (1,500 requests/month)  
+- **Features**: Real-time and historical rates, 168+ currencies
+- **Date Range**: Historical data from 2025-01-01 onward
 
 ### Machine Learning Model
 
